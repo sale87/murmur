@@ -7,7 +7,7 @@ SOUNDS_DIR := $(CONFIG_DIR)/sounds
 
 install:
 	cargo build --release
-	cp target/release/$(BINARY) $(INSTALL)/$(BINARY)
+	install -m 755 target/release/$(BINARY) $(INSTALL)/$(BINARY)
 	mkdir -p $(SOUNDS_DIR)
 	cp -n sounds/* $(SOUNDS_DIR)/
 	@echo "Installed $(BINARY) to $(INSTALL)/$(BINARY)"
