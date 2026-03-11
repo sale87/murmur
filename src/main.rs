@@ -118,8 +118,8 @@ impl App {
     fn new() -> anyhow::Result<Self> {
         let (_stream, handle) = OutputStream::try_default()?;
 
-        let sounds_dir = Path::new("sounds");
-        let mut entries: Vec<_> = std::fs::read_dir(sounds_dir)?
+        let sounds_dir = murmur_dir().join("sounds");
+        let mut entries: Vec<_> = std::fs::read_dir(&sounds_dir)?
             .filter_map(|e| e.ok())
             .filter(|e| e.path().extension().map_or(false, |x| x == "ogg"))
             .collect();
@@ -244,10 +244,14 @@ fn sorted_keys(m: &HashMap<String, Preset>) -> Vec<String> {
 // Persistence
 // ─────────────────────────────────────────────────────────────
 
-fn config_path() -> PathBuf {
+fn murmur_dir() -> PathBuf {
     let mut p = dirs::home_dir().unwrap_or_default();
-    p.push(".config/murmur/presets.json");
+    p.push(".config/murmur");
     p
+}
+
+fn config_path() -> PathBuf {
+    murmur_dir().join("presets.json")
 }
 
 fn load_presets() -> HashMap<String, Preset> {
