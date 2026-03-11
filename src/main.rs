@@ -27,18 +27,23 @@ use rodio::{Decoder, OutputStream, Sink, Source};
 // ─────────────────────────────────────────────────────────────
 
 struct LoopingSound {
-    path:        PathBuf,
-    inner:       Decoder<BufReader<File>>,
-    channels:    u16,
+    path: PathBuf,
+    inner: Decoder<BufReader<File>>,
+    channels: u16,
     sample_rate: u32,
 }
 
 impl LoopingSound {
     fn new(path: PathBuf) -> anyhow::Result<Self> {
         let dec = Self::open(&path)?;
-        let channels    = dec.channels();
+        let channels = dec.channels();
         let sample_rate = dec.sample_rate();
-        Ok(Self { path, inner: dec, channels, sample_rate })
+        Ok(Self {
+            path,
+            inner: dec,
+            channels,
+            sample_rate,
+        })
     }
 
     fn open(path: &Path) -> anyhow::Result<Decoder<BufReader<File>>> {
@@ -51,63 +56,83 @@ impl Iterator for LoopingSound {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            if let Some(s) = self.inner.next() { return Some(s); }
+            if let Some(s) = self.inner.next() {
+                return Some(s);
+            }
             match Self::open(&self.path) {
                 Ok(dec) => self.inner = dec,
-                Err(_)  => return None,
+                Err(_) => return None,
             }
         }
     }
 }
 
 impl Source for LoopingSound {
-    fn current_frame_len(&self) -> Option<usize> { self.inner.current_frame_len() }
-    fn channels(&self)          -> u16            { self.channels }
-    fn sample_rate(&self)       -> u32            { self.sample_rate }
-    fn total_duration(&self)    -> Option<Duration> { None }
+    fn current_frame_len(&self) -> Option<usize> {
+        self.inner.current_frame_len()
+    }
+    fn channels(&self) -> u16 {
+        self.channels
+    }
+    fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+    fn total_duration(&self) -> Option<Duration> {
+        None
+    }
 }
 use serde::{Deserialize, Serialize};
 
 // ── White on black palette ────────────────────────────────────
-const HOT:       Color = Color::Rgb(255, 255, 255);
-const BRIGHT:    Color = Color::Rgb(220, 220, 220);
-const MID:       Color = Color::Rgb(160, 160, 160);
-const DIM:       Color = Color::Rgb( 90,  90,  90);
-const BG:        Color = Color::Rgb(  0,   0,   0);
-const BG2:       Color = Color::Rgb( 10,  10,  10);
-const CURSOR_BG: Color = Color::Rgb( 40,  40,  40);
-const BORDER_C:  Color = Color::Rgb(100, 100, 100);
+const HOT: Color = Color::Rgb(255, 255, 255);
+const BRIGHT: Color = Color::Rgb(220, 220, 220);
+const MID: Color = Color::Rgb(160, 160, 160);
+const DIM: Color = Color::Rgb(90, 90, 90);
+const BG: Color = Color::Rgb(0, 0, 0);
+const BG2: Color = Color::Rgb(10, 10, 10);
+const CURSOR_BG: Color = Color::Rgb(40, 40, 40);
+const BORDER_C: Color = Color::Rgb(100, 100, 100);
 
 // ─────────────────────────────────────────────────────────────
 // Model
 // ─────────────────────────────────────────────────────────────
 
 struct Sound {
-    name:   String,
+    name: String,
     volume: f32,
     active: bool,
-    sink:   Sink,
+    sink: Sink,
 }
 
 #[derive(Serialize, Deserialize, Clone, Default)]
-struct SoundState { volume: f32, active: bool }
+struct SoundState {
+    volume: f32,
+    active: bool,
+}
 
 #[derive(Serialize, Deserialize, Clone, Default)]
-struct Preset { master: f32, sounds: HashMap<String, SoundState> }
+struct Preset {
+    master: f32,
+    sounds: HashMap<String, SoundState>,
+}
 
 #[derive(PartialEq, Clone, Copy)]
-enum Panel { Sounds, Presets, Input }
+enum Panel {
+    Sounds,
+    Presets,
+    Input,
+}
 
 struct App {
-    sounds:        Vec<Sound>,
-    cursor:        usize,
-    master:        f32,
-    presets:       HashMap<String, Preset>,
-    preset_names:  Vec<String>,
+    sounds: Vec<Sound>,
+    cursor: usize,
+    master: f32,
+    presets: HashMap<String, Preset>,
+    preset_names: Vec<String>,
     preset_cursor: usize,
-    preset_input:  String,
-    panel:         Panel,
-    _stream:       OutputStream,   // must stay alive
+    preset_input: String,
+    panel: Panel,
+    _stream: OutputStream, // must stay alive
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -133,12 +158,17 @@ impl App {
             sink.append(LoopingSound::new(path.clone())?);
             sink.pause();
             sink.set_volume(0.0);
-            sounds.push(Sound { name, volume: 1.0, active: false, sink });
+            sounds.push(Sound {
+                name,
+                volume: 1.0,
+                active: false,
+                sink,
+            });
         }
 
-        let presets      = load_presets();
+        let presets = load_presets();
         let preset_names = sorted_keys(&presets);
-        let last         = load_last();
+        let last = load_last();
 
         let mut app = Self {
             sounds,
@@ -186,13 +216,17 @@ impl App {
     fn vol_adjust(&mut self, delta: f32) {
         let i = self.cursor;
         self.sounds[i].volume = (self.sounds[i].volume + delta).clamp(0.0, 1.0);
-        if self.sounds[i].active { self.sync_sink(i); }
+        if self.sounds[i].active {
+            self.sync_sink(i);
+        }
     }
 
     fn master_adjust(&mut self, delta: f32) {
         self.master = (self.master + delta).clamp(0.0, 1.0);
         for i in 0..self.sounds.len() {
-            if self.sounds[i].active { self.sync_sink(i); }
+            if self.sounds[i].active {
+                self.sync_sink(i);
+            }
         }
     }
 
@@ -206,13 +240,28 @@ impl App {
 
     fn save_preset(&mut self) {
         let name = self.preset_input.trim().to_string();
-        if name.is_empty() { return; }
-        self.presets.insert(name, Preset {
-            master: self.master,
-            sounds: self.sounds.iter()
-                .map(|s| (s.name.clone(), SoundState { volume: s.volume, active: s.active }))
-                .collect(),
-        });
+        if name.is_empty() {
+            return;
+        }
+        self.presets.insert(
+            name,
+            Preset {
+                master: self.master,
+                sounds: self
+                    .sounds
+                    .iter()
+                    .map(|s| {
+                        (
+                            s.name.clone(),
+                            SoundState {
+                                volume: s.volume,
+                                active: s.active,
+                            },
+                        )
+                    })
+                    .collect(),
+            },
+        );
         self.preset_names = sorted_keys(&self.presets);
         self.preset_input.clear();
         save_presets(&self.presets);
@@ -279,18 +328,27 @@ fn load_presets() -> HashMap<String, Preset> {
 
 fn save_presets(presets: &HashMap<String, Preset>) {
     let p = config_path();
-    if let Some(d) = p.parent() { let _ = std::fs::create_dir_all(d); }
-    if let Ok(s) = serde_json::to_string_pretty(presets) { let _ = std::fs::write(p, s); }
+    if let Some(d) = p.parent() {
+        let _ = std::fs::create_dir_all(d);
+    }
+    if let Ok(s) = serde_json::to_string_pretty(presets) {
+        let _ = std::fs::write(p, s);
+    }
 }
 
-fn last_path() -> PathBuf { murmur_dir().join("last") }
+fn last_path() -> PathBuf {
+    murmur_dir().join("last")
+}
 
 fn save_last(name: &str) {
     let _ = std::fs::write(last_path(), name);
 }
 
 fn load_last() -> Option<String> {
-    std::fs::read_to_string(last_path()).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+    std::fs::read_to_string(last_path())
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -299,13 +357,21 @@ fn load_last() -> Option<String> {
 
 fn vol_bar(volume: f32, width: usize) -> String {
     let filled = (width as f32 * volume).round() as usize;
-    let empty  = width.saturating_sub(filled);
-    format!("[{}{}]{:4.0}%", "█".repeat(filled), "░".repeat(empty), volume * 100.0)
+    let empty = width.saturating_sub(filled);
+    format!(
+        "[{}{}]{:4.0}%",
+        "█".repeat(filled),
+        "░".repeat(empty),
+        volume * 100.0
+    )
 }
 
 fn panel_block(title: &str, active: bool) -> Block<'_> {
     let (border_col, title_style) = if active {
-        (HOT, Style::default().fg(BG).bg(HOT).add_modifier(Modifier::BOLD))
+        (
+            HOT,
+            Style::default().fg(BG).bg(HOT).add_modifier(Modifier::BOLD),
+        )
     } else {
         (BORDER_C, Style::default().fg(MID))
     };
@@ -323,7 +389,11 @@ fn ui(f: &mut Frame, app: &App) {
 
     let rows = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(0), Constraint::Length(1), Constraint::Length(1)])
+        .constraints([
+            Constraint::Min(0),
+            Constraint::Length(1),
+            Constraint::Length(1),
+        ])
         .split(area);
 
     let cols = Layout::default()
@@ -346,19 +416,33 @@ fn render_sounds(f: &mut Frame, app: &App, area: Rect) {
     // fixed chars: 1+5+2+14+2 = 24, suffix "] xxx%" = 6  → bar_w = w - 30
     let bar_w = (inner.width as usize).saturating_sub(30).max(4);
 
-    let lines: Vec<Line> = app.sounds.iter().enumerate().map(|(i, s)| {
-        let tag   = if s.active { "[ ON]" } else { "[   ]" };
-        let label = format!("{:<14}", s.name.replace('_', " "));
-        let bar   = vol_bar(s.volume, bar_w);
-        let text  = format!(" {}  {}  {}", tag, label, bar);
+    let lines: Vec<Line> = app
+        .sounds
+        .iter()
+        .enumerate()
+        .map(|(i, s)| {
+            let tag = if s.active { "[ ON]" } else { "[   ]" };
+            let label = format!("{:<14}", s.name.replace('_', " "));
+            let bar = vol_bar(s.volume, bar_w);
+            let text = format!(" {}  {}  {}", tag, label, bar);
 
-        match (i == app.cursor, app.panel == Panel::Sounds, s.active) {
-            (true, true,  _)     => Line::styled(text, Style::default().fg(HOT).bg(CURSOR_BG).add_modifier(Modifier::BOLD)),
-            (true, false, _)     => Line::styled(text, Style::default().fg(DIM).add_modifier(Modifier::UNDERLINED)),
-            (false, _, true)     => Line::styled(text, Style::default().fg(BRIGHT)),
-            (false, _, false)    => Line::styled(text, Style::default().fg(DIM)),
-        }
-    }).collect();
+            match (i == app.cursor, app.panel == Panel::Sounds, s.active) {
+                (true, true, _) => Line::styled(
+                    text,
+                    Style::default()
+                        .fg(HOT)
+                        .bg(CURSOR_BG)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                (true, false, _) => Line::styled(
+                    text,
+                    Style::default().fg(DIM).add_modifier(Modifier::UNDERLINED),
+                ),
+                (false, _, true) => Line::styled(text, Style::default().fg(BRIGHT)),
+                (false, _, false) => Line::styled(text, Style::default().fg(DIM)),
+            }
+        })
+        .collect();
 
     f.render_widget(Paragraph::new(lines).style(Style::default().bg(BG)), inner);
 }
@@ -372,25 +456,38 @@ fn render_presets(f: &mut Frame, app: &App, area: Rect) {
     let sections = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Min(0),       // list
-            Constraint::Length(1),    // "name:" label
-            Constraint::Length(1),    // input
-            Constraint::Length(1),    // hints
+            Constraint::Min(0),    // list
+            Constraint::Length(1), // "name:" label
+            Constraint::Length(1), // input
+            Constraint::Length(1), // hints
         ])
         .split(inner);
 
     // Preset list
     let preset_focused = matches!(app.panel, Panel::Presets | Panel::Input);
-    let items: Vec<ListItem> = app.preset_names.iter().enumerate().map(|(i, name)| {
-        let prefix = if i == app.preset_cursor { "> " } else { "  " };
-        let text = format!("{}{}", prefix, name);
-        if i == app.preset_cursor && preset_focused {
-            ListItem::new(text).style(Style::default().fg(HOT).bg(CURSOR_BG).add_modifier(Modifier::BOLD))
-        } else {
-            ListItem::new(text).style(Style::default().fg(DIM))
-        }
-    }).collect();
-    f.render_widget(List::new(items).style(Style::default().bg(BG2)), sections[0]);
+    let items: Vec<ListItem> = app
+        .preset_names
+        .iter()
+        .enumerate()
+        .map(|(i, name)| {
+            let prefix = if i == app.preset_cursor { "> " } else { "  " };
+            let text = format!("{}{}", prefix, name);
+            if i == app.preset_cursor && preset_focused {
+                ListItem::new(text).style(
+                    Style::default()
+                        .fg(HOT)
+                        .bg(CURSOR_BG)
+                        .add_modifier(Modifier::BOLD),
+                )
+            } else {
+                ListItem::new(text).style(Style::default().fg(DIM))
+            }
+        })
+        .collect();
+    f.render_widget(
+        List::new(items).style(Style::default().bg(BG2)),
+        sections[0],
+    );
 
     // Label
     f.render_widget(
@@ -416,10 +513,10 @@ fn render_presets(f: &mut Frame, app: &App, area: Rect) {
 fn render_master(f: &mut Frame, app: &App, area: Rect) {
     // " MASTER  [bar] xxx%   m/M:vol  F5:stop"
     // " MASTER  [" = 10, "] xxx%" = 6, "   m/M:vol  F5:stop" = 19 → bar_w = w - 35
-    let bar_w  = (area.width as usize).saturating_sub(35).max(4);
-    let bar    = vol_bar(app.master, bar_w);
-    let hint   = "   m/M:master  F5:stop";
-    let text   = format!(" MASTER  {}{}",  bar, hint);
+    let bar_w = (area.width as usize).saturating_sub(35).max(4);
+    let bar = vol_bar(app.master, bar_w);
+    let hint = "   m/M:master  F5:stop";
+    let text = format!(" MASTER  {}{}", bar, hint);
     f.render_widget(
         Paragraph::new(text).style(Style::default().fg(MID).bg(BG2)),
         area,
@@ -427,7 +524,8 @@ fn render_master(f: &mut Frame, app: &App, area: Rect) {
 }
 
 fn render_footer(f: &mut Frame, area: Rect) {
-    let text = " ↑↓/jk:select  SPC:toggle  ←→:vol  Shift+←→:fine  Tab:panel  i:name  Enter:load  q:quit";
+    let text =
+        " ↑↓/jk:select  SPC:toggle  ←→:vol  Shift+←→:fine  Tab:panel  i:name  Enter:load  q:quit";
     f.render_widget(
         Paragraph::new(text).style(Style::default().fg(MID).bg(BG2)),
         area,
@@ -441,54 +539,92 @@ fn render_footer(f: &mut Frame, area: Rect) {
 /// Returns true when the app should exit.
 fn handle_key(app: &mut App, key: KeyEvent) -> bool {
     let shift = key.modifiers.contains(KeyModifiers::SHIFT);
-    let ctrl  = key.modifiers.contains(KeyModifiers::CONTROL);
+    let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
 
     // Always-on keys
     match key.code {
-        KeyCode::Char('c') if ctrl                        => return true,
-        KeyCode::Char('q') if app.panel != Panel::Input   => return true,
-        KeyCode::F(2)                                      => { app.save_preset();   return false; }
-        KeyCode::F(3)                                      => { app.load_preset();   return false; }
-        KeyCode::F(4)                                      => { app.delete_preset(); return false; }
-        KeyCode::F(5)                                      => { app.stop_all();      return false; }
+        KeyCode::Char('c') if ctrl => return true,
+        KeyCode::Char('q') if app.panel != Panel::Input => return true,
+        KeyCode::F(2) => {
+            app.save_preset();
+            return false;
+        }
+        KeyCode::F(3) => {
+            app.load_preset();
+            return false;
+        }
+        KeyCode::F(4) => {
+            app.delete_preset();
+            return false;
+        }
+        KeyCode::F(5) => {
+            app.stop_all();
+            return false;
+        }
         KeyCode::Tab => {
             app.panel = match app.panel {
-                Panel::Sounds           => Panel::Presets,
-                Panel::Presets
-                | Panel::Input          => Panel::Sounds,
+                Panel::Sounds => Panel::Presets,
+                Panel::Presets | Panel::Input => Panel::Sounds,
             };
             return false;
         }
         // m/M adjust master from any panel except while typing
-        KeyCode::Char('m') if app.panel != Panel::Input => { app.master_adjust(-0.05); return false; }
-        KeyCode::Char('M') if app.panel != Panel::Input => { app.master_adjust( 0.05); return false; }
+        KeyCode::Char('m') if app.panel != Panel::Input => {
+            app.master_adjust(-0.05);
+            return false;
+        }
+        KeyCode::Char('M') if app.panel != Panel::Input => {
+            app.master_adjust(0.05);
+            return false;
+        }
         _ => {}
     }
 
     // Panel-specific keys
     match app.panel {
         Panel::Sounds => match key.code {
-            KeyCode::Up   | KeyCode::Char('k') => { app.cursor = app.cursor.saturating_sub(1); }
-            KeyCode::Down | KeyCode::Char('j') => { app.cursor = (app.cursor + 1).min(app.sounds.len().saturating_sub(1)); }
-            KeyCode::Char(' ')                 => app.toggle(),
-            KeyCode::Left                      => app.vol_adjust(if shift { -0.01 } else { -0.05 }),
-            KeyCode::Right                     => app.vol_adjust(if shift {  0.01 } else {  0.05 }),
+            KeyCode::Up | KeyCode::Char('k') => {
+                app.cursor = app.cursor.saturating_sub(1);
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                app.cursor = (app.cursor + 1).min(app.sounds.len().saturating_sub(1));
+            }
+            KeyCode::Char(' ') => app.toggle(),
+            KeyCode::Left => app.vol_adjust(if shift { -0.01 } else { -0.05 }),
+            KeyCode::Right => app.vol_adjust(if shift { 0.01 } else { 0.05 }),
             _ => {}
-        }
+        },
         Panel::Presets => match key.code {
-            KeyCode::Up   | KeyCode::Char('k') => { app.preset_cursor = app.preset_cursor.saturating_sub(1); }
-            KeyCode::Down | KeyCode::Char('j') => { app.preset_cursor = (app.preset_cursor + 1).min(app.preset_names.len().saturating_sub(1)); }
-            KeyCode::Enter                     => app.load_preset(),
-            KeyCode::Char('i') | KeyCode::Char('n') => { app.panel = Panel::Input; }
+            KeyCode::Up | KeyCode::Char('k') => {
+                app.preset_cursor = app.preset_cursor.saturating_sub(1);
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                app.preset_cursor =
+                    (app.preset_cursor + 1).min(app.preset_names.len().saturating_sub(1));
+            }
+            KeyCode::Enter => app.load_preset(),
+            KeyCode::Char('i') | KeyCode::Char('n') => {
+                app.panel = Panel::Input;
+            }
             _ => {}
-        }
+        },
         Panel::Input => match key.code {
-            KeyCode::Enter     => { app.save_preset(); app.panel = Panel::Presets; }
-            KeyCode::Esc       => { app.preset_input.clear(); app.panel = Panel::Presets; }
-            KeyCode::Backspace => { app.preset_input.pop(); }
-            KeyCode::Char(c)   => { app.preset_input.push(c); }
+            KeyCode::Enter => {
+                app.save_preset();
+                app.panel = Panel::Presets;
+            }
+            KeyCode::Esc => {
+                app.preset_input.clear();
+                app.panel = Panel::Presets;
+            }
+            KeyCode::Backspace => {
+                app.preset_input.pop();
+            }
+            KeyCode::Char(c) => {
+                app.preset_input.push(c);
+            }
             _ => {}
-        }
+        },
     }
 
     false
@@ -521,7 +657,9 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> 
         terminal.draw(|f| ui(f, app))?;
         if event::poll(Duration::from_millis(16))? {
             if let Event::Key(key) = event::read()? {
-                if handle_key(app, key) { break; }
+                if handle_key(app, key) {
+                    break;
+                }
             }
         }
     }
