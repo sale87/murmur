@@ -4,13 +4,32 @@
 
 Ambient sound mixer for the terminal. Play multiple looping OGG files simultaneously with individual and master volume control. Save and load named presets.
 
+## Install
+
+```
+make install
+```
+
+This will:
+- Build the release binary with `cargo build --release`
+- Install it to `~/.cargo/bin/murmur`
+- Create `~/.config/murmur/sounds/` and copy the bundled sound files there (existing files are left untouched)
+
+To remove the binary:
+
+```
+make uninstall
+```
+
+This removes the binary but leaves `~/.config/murmur/` intact so presets are preserved.
+
 ## Usage
 
 ```
-cargo run --release
+murmur
 ```
 
-Sounds are loaded from the `sounds/` directory. Add `.ogg` files there to extend the library.
+On first launch, no sounds play. Toggle sounds with `Space`, adjust volumes with `←`/`→`, and save the mix as a named preset with `F2`. The last loaded preset is restored automatically on the next launch.
 
 ## Keys
 
