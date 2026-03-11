@@ -153,6 +153,9 @@ impl App {
         };
 
         if let Some(name) = last {
+            if let Some(idx) = app.preset_names.iter().position(|n| n == &name) {
+                app.preset_cursor = idx;
+            }
             app.apply_preset(&name);
         }
 
