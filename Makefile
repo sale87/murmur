@@ -9,7 +9,7 @@ install:
 	cargo build --release
 	install -m 755 target/release/$(BINARY) $(INSTALL)/$(BINARY)
 	mkdir -p $(SOUNDS_DIR)
-	cp -n sounds/* $(SOUNDS_DIR)/
+	-cp -n sounds/* $(SOUNDS_DIR)/
 	@echo "Installed $(BINARY) to $(INSTALL)/$(BINARY)"
 	@echo "Sounds    -> $(SOUNDS_DIR)"
 	@echo "Presets   -> $(CONFIG_DIR)/presets.json"
