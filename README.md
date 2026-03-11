@@ -1,5 +1,7 @@
 # murmur
 
+![murmur screenshot](assets/murmur.png)
+
 Ambient sound mixer for the terminal. Play multiple looping OGG files simultaneously with individual and master volume control. Save and load named presets.
 
 ## Usage
