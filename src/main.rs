@@ -136,10 +136,11 @@ impl App {
             sounds.push(Sound { name, volume: 1.0, active: false, sink });
         }
 
-        let presets = load_presets();
+        let presets      = load_presets();
         let preset_names = sorted_keys(&presets);
+        let last         = load_last();
 
-        Ok(Self {
+        let mut app = Self {
             sounds,
             cursor: 0,
             master: 1.0,
@@ -149,7 +150,13 @@ impl App {
             preset_input: String::new(),
             panel: Panel::Sounds,
             _stream,
-        })
+        };
+
+        if let Some(name) = last {
+            app.apply_preset(&name);
+        }
+
+        Ok(app)
     }
 
     fn effective_vol(&self, i: usize) -> f32 {
@@ -210,7 +217,12 @@ impl App {
 
     fn load_preset(&mut self) {
         let Some(name) = self.preset_names.get(self.preset_cursor).cloned() else { return };
-        let Some(preset) = self.presets.get(&name).cloned() else { return };
+        self.apply_preset(&name);
+        save_last(&name);
+    }
+
+    fn apply_preset(&mut self, name: &str) {
+        let Some(preset) = self.presets.get(name).cloned() else { return };
         self.master = preset.master;
         for i in 0..self.sounds.len() {
             if let Some(st) = preset.sounds.get(&self.sounds[i].name) {
@@ -266,6 +278,16 @@ fn save_presets(presets: &HashMap<String, Preset>) {
     let p = config_path();
     if let Some(d) = p.parent() { let _ = std::fs::create_dir_all(d); }
     if let Ok(s) = serde_json::to_string_pretty(presets) { let _ = std::fs::write(p, s); }
+}
+
+fn last_path() -> PathBuf { murmur_dir().join("last") }
+
+fn save_last(name: &str) {
+    let _ = std::fs::write(last_path(), name);
+}
+
+fn load_last() -> Option<String> {
+    std::fs::read_to_string(last_path()).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
 }
 
 // ─────────────────────────────────────────────────────────────
